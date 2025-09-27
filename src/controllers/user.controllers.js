@@ -16,7 +16,7 @@ const generateAccessAndRefreshTokens = async (userId) =>
     await user.save({ validateBeforeSave: false})
     return {accessToken, refreshToken}
   } catch (error) {
-    throw new ApiError(500,"Something went wrong whilegenerating access and refresh token")
+    throw new ApiError(500,"Something went wrong while generating access and refresh token")
   }
 };
 
@@ -156,7 +156,7 @@ const refreshAccessToken = asyncHandler(async (req,res) => {
 
    try {
      const decodedToken = jwt.verify(incomingRefreshToken,process.env.REFRESH_TOKEN_SECRET)
-     const user = User.findById(decodedToken?._id)
+     const user = await User.findById(decodedToken?._id)
  
       if(!user)
            {throw new ApiError(401,"Invalid refresh Token!")}
@@ -179,14 +179,65 @@ const refreshAccessToken = asyncHandler(async (req,res) => {
              {accessToken,refreshToken: newRefreshToken},"Access Token Refreshed successfully!"))
  
    } catch (error) {
-    throw new ApiError(401,"unaouthorized request");
+    throw new ApiError(401,"unauthorized request");
     
    }
 
+})
+
+const changeUserPassword = asyncHandler(async (req,res) => {
+  //1. req -> body
+  const {oldPassword,newPassword} = req.body;
+  //2. find the user
+  const user = await User.findById(req.user?._id)
+  //3. old password check
+  const isPasswordCorrect = await user.isPasswordCorrect(oldPassword)
+  if(!isPasswordCorrect)
+    {
+      throw new ApiError(400,"Old password is incorrect")
+    }
+    //4. update new password
+    user.password = newPassword;
+    await user.save({validateBeforeSave: false});
+    //5. success response
+    return res.status(200).json(new ApiResponse(200,{},"Password changed successfully"));
+})
+
+const getCurrentUser = asyncHandler(async (req,res) => {
+  return res.status(200).json(200,req.user,"user fetched successfully")
+})
+
+const updateAccountDetails = asyncHandler(async (req,res) =>{
+  //1. get fullName , email from req-> body
+  const {fullName,email} = req.body
+  //2.check if fullName or email is availabel
+  if(!fullName || !email)
+  {
+    throw new ApiError(400,"All fields are required.")
+  }
+  //3.find the user
+  const user = await User.findByIdAndUpdate(
+    req.user?._id,
+    {
+      $set: 
+      {
+        fullName: fullName,
+        email: email
+      }
+    },
+    // After Updation new value will be return
+    {new: true}
+  ).select("-password")
+  //4.Success response
+  return res.status(200)
+  .json(new ApiResponse(200, user, "Account detailes updated successfulllyy"))
 })
       export { 
         registerUser,
         loginUser,  
         logoutUser,
-        refreshAccessToken
+        refreshAccessToken,
+        changeUserPassword,
+        getCurrentUser,
+        updateAccountDetails
 };
